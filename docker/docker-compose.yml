@@ -1,0 +1,54 @@
+version: "3.9"
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - C:/code/data/mosquitto/data:/mosquitto/data
+      - C:/code/data/mosquitto/log:/mosquitto/log
+
+  timescaledb:
+    image: timescale/timescaledb-ha:pg16
+    container_name: timescaledb
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=mqttdb
+      - POSTGRES_USER=mqttuser
+      - POSTGRES_PASSWORD=changeme
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescaledb-data:/home/postgres/pgdata/data
+      - ./timescaledb/init:/docker-entrypoint-initdb.d
+
+  mqtt-consumer:
+    build: ./mqtt-consumer
+    container_name: mqtt-consumer
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+      - timescaledb
+    environment:
+      - MQTT_BROKER=mosquitto
+      - MQTT_PORT=1883
+      - MQTT_TOPIC=device/+/telemetry/env
+      - PGHOST=timescaledb
+      - PGPORT=5432
+      - PGDATABASE=mqttdb
+      - PGUSER=mqttuser
+      - PGPASSWORD=changeme
+
+  mqtt-simulator:
+    build: ./mqtt-simulator
+    container_name: mqtt-simulator
+    depends_on:
+      - mosquitto
+    restart: unless-stopped
+
+volumes:
+  timescaledb-data:
